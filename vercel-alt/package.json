@@ -1,0 +1,8 @@
+{
+  "name": "travel-live",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@google/genai": "^2.23.0"
+  }
+}
