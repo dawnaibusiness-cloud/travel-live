@@ -48,11 +48,25 @@ load_env()
 PAGE_URL = os.environ.get("TRAVEL_LIVE_URL", "").rstrip("/")
 MODEL = os.environ.get("LIVE_MODEL", "gemini-3.8-live")
 
-SYSTEM_INSTRUCTION = """אתה מדריך טיולים ישראלי שמלווה מטייל בזמן אמת.
-אתה רואה מה שהמצלמה שלו רואה. ענה קצר — שניים־שלושה משפטים, כמו בשיחה.
-אם הוא מכוון על תפריט, שלט או תמרור — תרגם והסבר.
-אם הוא שואל לאן ללכת — תן המלצה אחת קונקרטית, לא רשימה.
-דבר בעברית אלא אם פנו אליך בשפה אחרת."""
+SYSTEM_INSTRUCTION = """RESPOND IN HEBREW. YOU MUST RESPOND UNMISTAKABLY IN HEBREW,
+unless the user speaks to you in another language — then match their language.
+
+אתה מדריך טיולים ישראלי שמלווה מטייל בזמן אמת.
+לפעמים אתה רואה מה שהמצלמה שלו רואה, ולפעמים לא — אל תמציא מה שאתה לא רואה.
+ענה קצר, שניים־שלושה משפטים, כמו בשיחה אמיתית. בלי רשימות ובלי הקדמות.
+אם הוא מכוון על תפריט, שלט או תמרור — תרגם והסבר מה כתוב.
+אם הוא שואל לאן ללכת — תן המלצה אחת קונקרטית עם שם מקום, לא אפשרויות."""
+
+VOICE = "Charon"   # גברי, טון של מדריך. חלופות: Orus, Iapetus
+
+# SMART מוסיף פיסוק ומנקה גמגומים, ורמזי שפה משפרים תמלול עברית.
+# השדות האלה מתועדים למודל התמלול הייעודי; אם 3.8 Live דוחה אותם,
+# נופלים חזרה לתמלול רגיל במקום להיכשל.
+SMART_TRANSCRIPTION = types.AudioTranscriptionConfig(
+    mode=types.AudioTranscriptionConfigMode.SMART,
+    language_codes=["he-IL", "en-US"],
+)
+PLAIN_TRANSCRIPTION = types.AudioTranscriptionConfig()
 
 api_key = os.environ.get("GEMINI_API_KEY", "")
 if not api_key or api_key == "PASTE_YOUR_KEY_HERE":
@@ -62,38 +76,59 @@ if not PAGE_URL:
 
 # הטוקן מונפק ב-v1alpha, ולכן גם החיבור מהטלפון חייב להיות באותה גרסה.
 API_VERSION = "v1alpha"
+MINUTES = 60   # אורך חיי הטוקן
+USES = 25      # כמה פעמים אפשר לפתוח שיחה עם אותו QR
 
 client = genai.Client(api_key=api_key, http_options={"api_version": API_VERSION})
 now = dt.datetime.now(tz=dt.timezone.utc)
 
-token = client.auth_tokens.create(
-    config=types.CreateAuthTokenConfig(
-        # מספר פתיחות סשן, לא מספר שיחות. עצירה והמשך שורפים עוד אחד,
-        # ולכן 1 היה נגמר מיד אחרי השיחה הראשונה.
-        uses=25,
-        expire_time=now + dt.timedelta(minutes=60),
-        # חלון לפתיחת הסשן — צריך מספיק זמן כדי לסרוק, לאשר מיקרופון וללחוץ
-        new_session_expire_time=now + dt.timedelta(minutes=10),
-        live_connect_constraints=types.LiveConnectConstraints(
-            model=MODEL,
-            config=types.LiveConnectConfig(
-                response_modalities=["AUDIO"],
-                system_instruction=SYSTEM_INSTRUCTION,
-                input_audio_transcription=types.AudioTranscriptionConfig(),
-                output_audio_transcription=types.AudioTranscriptionConfig(),
-                # רגישות התחלה נשארת בברירת המחדל — LOW גרם לו לא לזהות
-                # שהתחלת לדבר ולהיראות תקוע.
-                # silence_duration קובע מתי התור שלך נגמר והוא מתחיל לענות.
-                realtime_input_config=types.RealtimeInputConfig(
-                    automatic_activity_detection=types.AutomaticActivityDetection(
-                        prefix_padding_ms=200,
-                        silence_duration_ms=700,
-                    )
+def mint(input_transcription):
+    return client.auth_tokens.create(
+        config=types.CreateAuthTokenConfig(
+            # מספר פתיחות סשן, לא מספר שיחות. עצירה והמשך שורפים עוד אחד.
+            uses=USES,
+            expire_time=now + dt.timedelta(minutes=MINUTES),
+            # חלון לפתיחת הסשן — מספיק זמן לסרוק, לאשר מיקרופון וללחוץ
+            new_session_expire_time=now + dt.timedelta(minutes=10),
+            live_connect_constraints=types.LiveConnectConstraints(
+                model=MODEL,
+                config=types.LiveConnectConfig(
+                    response_modalities=["AUDIO"],
+                    system_instruction=SYSTEM_INSTRUCTION,
+                    speech_config=types.SpeechConfig(
+                        voice_config=types.VoiceConfig(
+                            prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=VOICE)
+                        )
+                    ),
+                    # בלי זה סשן עם אודיו+וידאו נחתך אחרי שתי דקות.
+                    context_window_compression=types.ContextWindowCompressionConfig(
+                        sliding_window=types.SlidingWindow()
+                    ),
+                    # מאפשר לעצור ולהמשיך בלי לאבד את ההקשר
+                    session_resumption=types.SessionResumptionConfig(),
+                    input_audio_transcription=input_transcription,
+                    output_audio_transcription=types.AudioTranscriptionConfig(),
+                    # רגישות התחלה בברירת המחדל — LOW גרם לו לא לזהות דיבור.
+                    # silence_duration קובע מתי התור שלך נגמר והוא מתחיל לענות.
+                    realtime_input_config=types.RealtimeInputConfig(
+                        automatic_activity_detection=types.AutomaticActivityDetection(
+                            prefix_padding_ms=200,
+                            silence_duration_ms=700,
+                        )
+                    ),
                 ),
             ),
-        ),
+        )
     )
-)
+
+
+try:
+    token = mint(SMART_TRANSCRIPTION)
+    transcription = "SMART + he-IL"
+except Exception as exc:
+    print(f"[תמלול משופר נדחה, נופל לרגיל: {type(exc).__name__}]")
+    token = mint(PLAIN_TRANSCRIPTION)
+    transcription = "רגיל"
 
 url = f"{PAGE_URL}/#t={token.name}&m={MODEL}&v={API_VERSION}"
 
@@ -102,7 +137,9 @@ qr.save("qr.png", scale=8, border=3)
 
 print()
 print(f"מודל:  {MODEL}")
-print(f"תוקף:  30 דקות, סשן אחד")
+print(f"קול:   {VOICE} (גברי)")
+print(f"תמלול: {transcription}")
+print(f"תוקף:  {MINUTES} דקות, עד {USES} פתיחות שיחה")
 print(f"נשמר:  qr.png")
 print()
 print("סרוק מהאייפון. אל תשתף את ה-QR — הוא מכיל טוקן פעיל.")

@@ -3,133 +3,83 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<meta name="theme-color" content="#0a0e1a">
+<meta name="theme-color" content="#07090f">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>מדריך טיולים חי</title>
-<style>
-:root{
-  --bg:#0a0e1a; --card:#141a2e; --card2:#1b2238; --line:#2a3350;
-  --fg:#f0f3fa; --dim:#8e98b5; --accent:#5b8cff;
-  --on:#3ddc97; --warn:#ffb454; --bad:#ff6b6b;
-  --r:16px;
-}
-*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
-html,body{height:100%; overscroll-behavior:none}
-body{
-  margin:0; background:var(--bg); color:var(--fg);
-  font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Arial,sans-serif;
-  display:flex; flex-direction:column; gap:12px;
-  max-width:600px; margin-inline:auto;
-  padding:calc(12px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right))
-          calc(12px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));
-}
-
-/* ---------- כותרת ---------- */
-header{display:flex; align-items:center; justify-content:space-between; gap:10px; flex:0 0 auto}
-h1{font-size:18px; margin:0; font-weight:650; letter-spacing:-.01em}
-.pill{
-  display:inline-flex; align-items:center; gap:7px;
-  font-size:12.5px; font-weight:600; color:var(--dim);
-  background:var(--card); border:1px solid var(--line);
-  padding:6px 11px; border-radius:999px; white-space:nowrap;
-}
-.dot{width:7px; height:7px; border-radius:50%; background:var(--dim); flex:0 0 auto}
-.pill.on{color:var(--on); border-color:#22503d}
-.pill.on .dot{background:var(--on); animation:pulse 1.6s ease-in-out infinite}
-.pill.busy{color:var(--accent); border-color:#2b3d6b}
-.pill.busy .dot{background:var(--accent); animation:pulse .9s ease-in-out infinite}
-.pill.bad{color:var(--bad); border-color:#5a2430}
-.pill.bad .dot{background:var(--bad)}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
-
-/* ---------- שגיאה ---------- */
-#err{
-  flex:0 0 auto; background:#2e1520; border:1px solid #5e2130; color:#ffc9d1;
-  padding:11px 13px; border-radius:var(--r); font-size:13.5px; word-break:break-word;
-}
-#err b{display:block; margin-bottom:3px; color:#ff9aa8}
-
-/* ---------- מצלמה ---------- */
-.cam-wrap{position:relative; flex:0 0 auto}
-#video{
-  width:100%; display:block; border-radius:var(--r); background:#000;
-  aspect-ratio:4/3; object-fit:cover; border:1px solid var(--line);
-}
-.cam-tag{
-  position:absolute; top:9px; inset-inline-start:9px;
-  background:rgba(10,14,26,.78); backdrop-filter:blur(8px);
-  font-size:11.5px; font-weight:600; color:var(--on);
-  padding:4px 9px; border-radius:999px;
-}
-
-/* ---------- תמלול ---------- */
-#log{
-  flex:1 1 auto; min-height:140px; overflow-y:auto; -webkit-overflow-scrolling:touch;
-  background:var(--card); border:1px solid var(--line); border-radius:var(--r);
-  padding:14px; display:flex; flex-direction:column; gap:13px;
-}
-.hint{color:var(--dim); font-size:14px; text-align:center; margin:auto; max-width:16em}
-.hint b{color:var(--fg); display:block; margin-bottom:6px; font-size:15px}
-.hint span{display:block; margin-top:9px; font-size:13px; opacity:.8}
-.row{display:flex; flex-direction:column; gap:3px; animation:in .2s ease}
-@keyframes in{from{opacity:0; transform:translateY(4px)}to{opacity:1; transform:none}}
-.who{font-size:11px; font-weight:700; letter-spacing:.03em; color:var(--dim)}
-.row.ai .who{color:var(--accent)}
-.txt{white-space:pre-wrap; word-break:break-word}
-.row.me .txt{color:var(--dim)}
-.row.ai .txt{
-  background:var(--card2); border:1px solid var(--line);
-  padding:9px 12px; border-radius:4px 14px 14px 14px; align-self:flex-start;
-}
-
-/* ---------- פקדים ---------- */
-.bar{display:flex; gap:10px; align-items:stretch; flex:0 0 auto}
-button{
-  font:inherit; font-weight:650; color:var(--fg); cursor:pointer;
-  background:var(--card); border:1px solid var(--line); border-radius:var(--r);
-  padding:15px 16px; transition:transform .08s, background .15s;
-}
-button:active{transform:scale(.97)}
-button:disabled{opacity:.45; cursor:default}
-#talk{flex:1; position:relative; overflow:hidden; background:var(--accent); border-color:transparent; color:#fff}
-#talk.on{background:var(--bad)}
-/* פס עוצמת מיקרופון — מראה שהמכשיר באמת קולט */
-#level{
-  position:absolute; inset-inline-start:0; bottom:0; height:3px; width:0%;
-  background:#fff; opacity:.85; transition:width .07s linear;
-}
-#cam{flex:0 0 auto; min-width:58px; font-size:19px; padding-inline:16px}
-#cam.on{background:var(--card2); border-color:var(--on)}
-.speaking #talk{box-shadow:0 0 0 3px rgba(91,140,255,.35)}
-</style>
+<link rel="stylesheet" href="./style.css">
 </head>
-<body>
+<body data-state="idle">
 
-<header>
-  <h1>מדריך טיולים חי</h1>
-  <span id="status" class="pill"><i class="dot"></i><span id="statusText">לא מחובר</span></span>
-</header>
+<div id="ambient"></div>
+<video id="feed" playsinline muted hidden></video>
+<div id="scrim"></div>
+<div id="edge"></div>
+
+<div id="pill" class="glass">
+  <span class="ring"><span class="halo"></span><span class="core"></span></span>
+  <span id="stateText">לא מחובר</span>
+</div>
 
 <div id="err" hidden></div>
 
-<div class="cam-wrap" id="camWrap" hidden>
-  <video id="video" playsinline muted></video>
-  <span class="cam-tag">● משדר למדריך</span>
-</div>
-
 <div id="log">
-  <div class="hint" id="hint">
-    <b>לחץ ״התחל שיחה״ ודבר</b>
-    שאל לאן ללכת, מה לאכול, או כוון את המצלמה על תפריט או שלט.
-    <span>הטלפון יבקש הרשאה למיקרופון — אשר.</span>
+  <div id="hint">
+    <b>לחץ על הכפתור הכחול</b>
+    דבר איתו חופשי — שאל לאן ללכת או מה לאכול.<br>
+    לחץ 📷 כדי שיראה מה שאתה רואה.
   </div>
 </div>
 
-<div class="bar">
-  <button id="talk">התחל שיחה<i id="level"></i></button>
-  <button id="cam" title="מצלמה">📷</button>
+<div id="controls">
+  <!-- סיום -->
+  <button id="end" class="gbtn end" hidden aria-label="סיים שיחה">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+      <path d="M6 6l12 12M18 6L6 18"/>
+    </svg>
+  </button>
+
+  <!-- צירוף קובץ -->
+  <button id="attach" class="gbtn" disabled aria-label="צרף תמונה או סרטון">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21.4 11.05 12.25 20.2a5.5 5.5 0 0 1-7.78-7.78l9.19-9.19a3.67 3.67 0 1 1 5.18 5.18l-9.2 9.2a1.83 1.83 0 1 1-2.59-2.59l8.49-8.48"/>
+    </svg>
+  </button>
+
+  <!-- התחלה -->
+  <button id="start" class="gbtn" aria-label="התחל שיחה">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/>
+    </svg>
+  </button>
+
+  <!-- מיוט -->
+  <button id="mute" class="gbtn" hidden aria-pressed="false" aria-label="השתק מיקרופון">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/>
+    </svg>
+  </button>
+
+  <!-- מצלמה -->
+  <button id="camera" class="gbtn" aria-pressed="false" aria-label="הדלק מצלמה">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+      <circle cx="12" cy="13" r="4"/>
+    </svg>
+  </button>
+
+  <!-- היפוך מצלמה -->
+  <button id="flip" class="gbtn" hidden aria-label="הפוך מצלמה">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 2v6h-6M3 22v-6h6"/>
+      <path d="M21 8a9 9 0 0 0-15-3L3 8M3 16a9 9 0 0 0 15 3l3-3"/>
+    </svg>
+  </button>
 </div>
+
+<input id="file" type="file" accept="image/*,video/*" hidden>
 
 <script type="module" src="./app.js"></script>
 </body>
