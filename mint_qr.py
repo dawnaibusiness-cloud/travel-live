@@ -13,6 +13,15 @@ import os
 import sys
 import webbrowser
 
+# בלי זה העברית יוצאת ג'יבריש בקונסול של Windows
+if sys.platform == "win32":
+    os.system("")  # מפעיל עיבוד ANSI ב-conhost
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
 import segno
 from google import genai
 from google.genai import types
