@@ -68,9 +68,12 @@ now = dt.datetime.now(tz=dt.timezone.utc)
 
 token = client.auth_tokens.create(
     config=types.CreateAuthTokenConfig(
-        uses=1,
-        expire_time=now + dt.timedelta(minutes=30),
-        new_session_expire_time=now + dt.timedelta(minutes=2),
+        # מספר פתיחות סשן, לא מספר שיחות. עצירה והמשך שורפים עוד אחד,
+        # ולכן 1 היה נגמר מיד אחרי השיחה הראשונה.
+        uses=25,
+        expire_time=now + dt.timedelta(minutes=60),
+        # חלון לפתיחת הסשן — צריך מספיק זמן כדי לסרוק, לאשר מיקרופון וללחוץ
+        new_session_expire_time=now + dt.timedelta(minutes=10),
         live_connect_constraints=types.LiveConnectConstraints(
             model=MODEL,
             config=types.LiveConnectConfig(
@@ -78,12 +81,13 @@ token = client.auth_tokens.create(
                 system_instruction=SYSTEM_INSTRUCTION,
                 input_audio_transcription=types.AudioTranscriptionConfig(),
                 output_audio_transcription=types.AudioTranscriptionConfig(),
-                # הטלפון מחזיק רמקול ומיקרופון באותו מכשיר. בלי הנמכת הרגישות,
-                # הדלף מהרמקול נקרא כאילו המשתמש התחיל לדבר והמדריך נקטע לעצמו.
+                # רגישות התחלה נשארת בברירת המחדל — LOW גרם לו לא לזהות
+                # שהתחלת לדבר ולהיראות תקוע.
+                # silence_duration קובע מתי התור שלך נגמר והוא מתחיל לענות.
                 realtime_input_config=types.RealtimeInputConfig(
                     automatic_activity_detection=types.AutomaticActivityDetection(
-                        start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_LOW,
-                        prefix_padding_ms=300,
+                        prefix_padding_ms=200,
+                        silence_duration_ms=700,
                     )
                 ),
             ),
@@ -95,7 +99,6 @@ url = f"{PAGE_URL}/#t={token.name}&m={MODEL}&v={API_VERSION}"
 
 qr = segno.make(url, error="m")
 qr.save("qr.png", scale=8, border=3)
-qr.terminal(compact=True)
 
 print()
 print(f"מודל:  {MODEL}")
@@ -104,4 +107,4 @@ print(f"נשמר:  qr.png")
 print()
 print("סרוק מהאייפון. אל תשתף את ה-QR — הוא מכיל טוקן פעיל.")
 
-webbrowser.open("qr.png")
+webbrowser.open(os.path.join(HERE, "qr.png"))

@@ -146,9 +146,9 @@ async function startMic() {
 
     if (!live || !session) return;
 
-    // בזמן שהמדריך מדבר, הרמקול דולף למיקרופון. מסננים רק רעש חלש —
-    // לא משתיקים לגמרי, אחרת אי אפשר להיכנס לו לדברים.
-    if (playHead > ctx.currentTime + 0.05 && rms < 0.02) return;
+    // סף נמוך מאוד — רק כדי לחסום דלף שקט מהרמקול.
+    // 0.02 היה חוסם דיבור שקט וגרם לזה להיראות תקוע.
+    if (playHead > ctx.currentTime + 0.05 && rms < 0.006) return;
 
     try {
       session.sendRealtimeInput({
