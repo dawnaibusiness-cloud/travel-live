@@ -12,9 +12,21 @@ const els = {
 };
 
 const hash = new URLSearchParams(location.hash.slice(1));
-const TOKEN = hash.get('t') || '';
+// טוקן בכתובת — הזרימה הישנה, QR מ-mint_qr.py. בלעדיו הדף מנפיק לעצמו
+// טוקן טרי מ-/api/token בכל לחיצה, ולכן הקישור עצמו לא פג תוקף.
+const HASH_TOKEN = hash.get('t') || '';
 const MODEL = hash.get('m') || 'gemini-3.8-live';
 const API_VERSION = hash.get('v') || 'v1alpha';
+
+// קוד הכניסה מגיע פעם אחת ב-#p= ונשמר, כדי שהקישור יעבוד גם אחרי
+// הוספה למסך הבית ובלי להחזיק סוד בצד השרת של הדף.
+const PASS_STORE = 'travel-live-pass';
+let passcode = hash.get('p') || '';
+if (passcode) {
+  try { localStorage.setItem(PASS_STORE, passcode); } catch (_) {}
+} else {
+  try { passcode = localStorage.getItem(PASS_STORE) || ''; } catch (_) {}
+}
 
 let ctx = null, session = null;
 let micStream = null, micNode = null;
@@ -238,9 +250,42 @@ function closeCam() {
 
 // ---------- חיבור ----------
 
-async function start() {
-  if (!TOKEN) return fail('חסר טוקן בכתובת', 'הרץ mint_qr.py במחשב וסרוק את ה-QR.');
+// מנפיק טוקן חד-פעמי מהשרת. כל התצורה — קול, הנחיה, תמלול — נקבעת שם,
+// כך שהטוקן שמגיע לטלפון נעול לשיחה אחת ולא שווה כלום מעבר לזה.
+async function mintToken() {
+  if (!passcode) {
+    passcode = (window.prompt('קוד כניסה') || '').trim();
+    if (!passcode) throw new Error('בלי קוד כניסה אי אפשר לפתוח שיחה.');
+  }
 
+  let res;
+  try {
+    res = await fetch('./api/token', { method: 'POST', headers: { 'x-passcode': passcode } });
+  } catch (e) {
+    throw new Error('אין חיבור לשרת. ' + (e.message || ''));
+  }
+
+  if (res.status === 401) {
+    passcode = '';
+    try { localStorage.removeItem(PASS_STORE); } catch (_) {}
+    throw new Error('קוד הכניסה שגוי. פתח שוב את הקישור המלא.');
+  }
+  if (res.status === 404) {
+    throw new Error('הדף הזה מוגש בלי שרת. פתח את הכתובת ב-Vercel, או סרוק QR מ-mint_qr.py.');
+  }
+  if (res.status === 429) throw new Error('יותר מדי ניסיונות. חכה דקה ונסה שוב.');
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || body.error || ('שגיאה ' + res.status));
+  }
+
+  const body = await res.json();
+  if (!body.token) throw new Error('השרת לא החזיר טוקן.');
+  try { localStorage.setItem(PASS_STORE, passcode); } catch (_) {}
+  return { token: body.token, model: body.model || MODEL, apiVersion: body.apiVersion || API_VERSION };
+}
+
+async function start() {
   els.err.hidden = true;
   els.start.disabled = true;
   setState('connecting');
@@ -252,10 +297,20 @@ async function start() {
     return fail('אין גישה למיקרופון', e.message);
   }
 
+  let token = HASH_TOKEN, model = MODEL, apiVersion = API_VERSION;
+  if (!token) {
+    try {
+      ({ token, model, apiVersion } = await mintToken());
+    } catch (e) {
+      setState('idle'); cleanup(); els.start.disabled = false;
+      return fail('הנפקת הטוקן נכשלה', e.message);
+    }
+  }
+
   try {
-    const ai = new GoogleGenAI({ apiKey: TOKEN, httpOptions: { apiVersion: API_VERSION } });
+    const ai = new GoogleGenAI({ apiKey: token, httpOptions: { apiVersion } });
     session = await ai.live.connect({
-      model: MODEL,
+      model,
       config: {
         responseModalities: [Modality.AUDIO],
         sessionResumption: resumeHandle ? { handle: resumeHandle } : {},
@@ -437,7 +492,3 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && ctx && ctx.state !== 'running') ctx.resume();
 });
 
-if (!TOKEN) {
-  fail('חסר טוקן בכתובת', 'הרץ mint_qr.py במחשב וסרוק את ה-QR מהאייפון.');
-  els.start.disabled = true;
-}
